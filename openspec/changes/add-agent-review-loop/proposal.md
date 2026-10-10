@@ -23,6 +23,10 @@ files on disk, and review state that survives restarts.
 - The reviewer can jump from a focused diff line into a full external editor
   (Zed, Neovim, VS Code, ...) opened at that exact line, with external edits
   flowing back through refresh.
+- The review surface gains vim/helix-style modal keybindings: single-key
+  navigation, a space-prefixed leader menu for review actions, and an explicit
+  insert mode when editing lines (replacing the current one-letter action
+  bindings, which stay available as space-menu entries).
 
 ## Capabilities
 
@@ -38,6 +42,8 @@ files on disk, and review state that survives restarts.
 - `external-editor-handoff`: jumping from a focused review line into a
   configured external editor showing the reviewed content, and folding
   external edits back into review.
+- `modal-review-bindings`: vim/helix-style modal keybindings for the review
+  surface — normal-mode navigation, leader-menu actions, insert mode.
 
 ### Modified Capabilities
 

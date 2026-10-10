@@ -39,11 +39,19 @@
 - [ ] 5.3 Content guarantee: compare working tree vs preview materialization before jump; mismatch → confirm write-back first, cancel aborts
 - [ ] 5.4 Refresh-after-return flow: external edits appear as human-provenance hunks, prior review state preserved (reuses task 1.4 matching)
 
-## 6. Verification
+## 6. Review surface: modal bindings
 
-- [ ] 6.1 `cargo test --workspace` green including new integration tests; `cargo clippy` clean
-- [ ] 6.2 Manual end-to-end: real ACP agent (e.g. claude-code-acp) edits a file in a scratch repo; reviewer edits a line, comments, rejects a hunk, sends feedback, agent replies in-thread (rendered, collapsible); jump to Zed/Nvim at focused line, edit externally, refresh, review the external edit; restart app, state intact
-- [ ] 6.3 Update README (try-it steps with a real agent, config example, editor presets) and record the v1 limitations (hunk granularity, refresh-not-watch, no IME, markdown subset)
+- [ ] 6.1 Keymap table + contexts: NORMAL navigation (`j`/`k`, `g g`, `G`, `] h` / `[ h`, arrow aliases, boundary no-op feedback) bound on the review context; remove bare-letter action bindings
+- [ ] 6.2 Leader state machine: `space` → pending context + footer indicator, single-key dispatch (`a`/`r`/`u`/`c`/`s`/`e`), unmatched key and 1 s timeout cancel with feedback
+- [ ] 6.3 Insert mode: `i`/`a` on focused added line enter editing, `Esc` commits + returns focus to normal mode; verify no normal binding fires while inserting
+- [ ] 6.4 Mode indicator (`NORMAL` / `INSERT`) + leader-pending state in the header/footer; footer hints reflect active mode
+- [ ] 6.5 Update README key guide to the modal scheme (space-menu table)
+
+## 7. Verification
+
+- [ ] 7.1 `cargo test --workspace` green including new integration tests; `cargo clippy` clean
+- [ ] 7.2 Manual end-to-end: real ACP agent (e.g. claude-code-acp) edits a file in a scratch repo; reviewer edits a line, comments, rejects a hunk, sends feedback, agent replies in-thread (rendered, collapsible); jump to Zed/Nvim at focused line, edit externally, refresh, review the external edit; drive the whole flow with modal keys only (j/k/gg/G/]h, space menu, i/Esc); restart app, state intact
+- [ ] 7.3 Update README (try-it steps with a real agent, config example, editor presets, modal keymap) and record the v1 limitations (hunk granularity, refresh-not-watch, no IME, markdown subset, no counts)
 
 ## Workflow follow-up
 

@@ -91,6 +91,24 @@ review shows" invariant); a v2 option may offer a temp-file jump instead.
 *Alternative:* always open the real file and let it mismatch the diff —
 rejected, it silently breaks the review's frame of reference.
 
+### D8: Modal keymap via key contexts and a leader state machine
+
+The surface is modal like Helix: `NORMAL` is the default context; `i`/`a` on
+a focused added line switch focus into the `EditableLine` (insert mode), whose
+own context (`EditableLine`) shadows all normal bindings — typed letters can
+never trigger actions. `Esc` commits and refocuses the root. Navigation
+(`j`/`k`, `g g`, `G`, `] h` / `[ h`, arrows as aliases) binds on the normal
+context. The leader menu is a two-stroke state machine: `space` raises a
+`ReviewLeader` context (pending indicator in the footer + status) in which
+single keys map to actions (`a` accept, `r` reject, `u` restore, `c` comment,
+`s` send, `e` editor jump); any unmatched key or a 1 s timeout drops back to
+normal with feedback. The previous bare-letter action bindings are removed in
+favor of the menu (arrows stay). Counts (`5j`) are deferred — the state machine
+hooks are there, but v1 ships without them.
+*Alternatives:* keep non-modal bindings (rejected: user preference for
+vim/helix ergonomics); full Helix object grammar/multiple cursors (rejected:
+scope — single-line focus is enough for review).
+
 ## Risks / Trade-offs
 
 - [ACP implementations drift / vary in handshake details] → probe with
@@ -105,6 +123,9 @@ rejected, it silently breaks the review's frame of reference.
   runner thread exits when the channel closes.
 - [Markdown subset creeps toward a full engine] → the v1 subset is fixed in the
   tasks; anything unparsed renders as plain text, never blocks the loop.
+- [Modal keymap grows binding conflicts as actions are added] → every new
+  action lands in the leader menu, not on a bare letter; the normal-mode map
+  stays navigation-only.
 
 ## Migration Plan
 
