@@ -68,6 +68,29 @@ disk; unreviewed review state (statuses/comments/edits) is carried over by
 matching hunks on (path, old_start, old_len). Auto-watching (inotify) is a
 follow-up.
 
+### D6: Agent messages = small markdown subset, collapsible thread panel
+
+Agent messages render through `pulldown-cmark` (event stream, no HTML) mapped
+onto GPUI elements. v1 subset: headings, bold/italic/inline-code spans, fenced
+code blocks, unordered/ordered lists, links rendered as styled text. The
+message panel is collapsible (per-thread persisted collapse state, default
+expanded) so a long transcript never crowds the diff.
+*Alternatives:* Zed's `markdown` crate (not on crates.io, drags zed-internal
+crates); HTML webview per message (heavy, styling mismatch).
+
+### D7: External editor handoff with content guarantee
+
+`J` on a focused line opens the configured editor via a template with `{file}`
+and `{line}` substitution (presets: `zed {file}:{line}`, `nvim +{line} {file}`,
+`code -g {file}:{line}`). The editor is spawned detached; lazydelta never
+manages its lifecycle. The target line maps to the focused line's new-side
+line number (removed-only lines map to the hunk's `new_start`). Before
+jumping, the app compares the working tree with the preview materialization:
+on mismatch it asks for write-back first (keeping the "editor sees what the
+review shows" invariant); a v2 option may offer a temp-file jump instead.
+*Alternative:* always open the real file and let it mismatch the diff —
+rejected, it silently breaks the review's frame of reference.
+
 ## Risks / Trade-offs
 
 - [ACP implementations drift / vary in handshake details] → probe with
@@ -80,6 +103,8 @@ follow-up.
   hunk matching is ambiguous.
 - [Blocking runner thread leaks on app exit] → `AcpAgent::drop` kills the child;
   runner thread exits when the channel closes.
+- [Markdown subset creeps toward a full engine] → the v1 subset is fixed in the
+  tasks; anything unparsed renders as plain text, never blocks the loop.
 
 ## Migration Plan
 
@@ -88,5 +113,4 @@ Pure addition; no existing state to migrate. The demo mode stays available via
 
 ## Open Questions
 
-- Should agent messages be rendered as raw markdown or stripped to plain text
-  for v1? (Does not affect storage or the loop; decide during UI tasks.)
+(none)

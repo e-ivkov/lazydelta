@@ -18,6 +18,11 @@ files on disk, and review state that survives restarts.
   written back to the working tree.
 - Threads (changeset + statuses + comments + human edits + agent messages) are
   persisted as JSON under the project and reloaded on restart.
+- Agent messages render with a simple markdown subset in a collapsible thread
+  panel.
+- The reviewer can jump from a focused diff line into a full external editor
+  (Zed, Neovim, VS Code, ...) opened at that exact line, with external edits
+  flowing back through refresh.
 
 ## Capabilities
 
@@ -30,6 +35,9 @@ files on disk, and review state that survives restarts.
   state, conversation) with atomic, human-readable files that reload on restart.
 - `worktree-changesets`: deriving changesets from a real directory (git-aware
   base detection) and materializing review outcomes back to the working tree.
+- `external-editor-handoff`: jumping from a focused review line into a
+  configured external editor showing the reviewed content, and folding
+  external edits back into review.
 
 ### Modified Capabilities
 
@@ -41,5 +49,7 @@ files on disk, and review state that survives restarts.
   CLI subprocess), keep existing API stable.
 - `crates/acp`: unchanged public API; concurrency wrapper lives in the app crate.
 - `crates/app`: new agent runner (std thread + channel), thread store, agent
-  picker + thread view additions; `s` rewired from preview to send.
-- No new external dependencies beyond what gpui already pulls in.
+  picker + thread view additions; `s` rewired from preview to send; small
+  markdown-subset renderer for agent messages; external editor launcher.
+- New dependency: `pulldown-cmark` (markdown events → GPUI elements); no other
+  new external dependencies beyond what gpui already pulls in.

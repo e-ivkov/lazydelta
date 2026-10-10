@@ -29,12 +29,21 @@
 - [ ] 4.3 Project open flow: pick directory, derive changeset (D2/D3), refresh action `R` with state carry-over and ambiguity warning
 - [ ] 4.4 Write-back action: materialize preview / accepted-only to the working tree, with confirmation when overwriting unreviewed external changes
 - [ ] 4.5 Keep `--demo` mode working (current hardcoded changeset path)
+- [ ] 4.6 Markdown-subset renderer for agent messages (headings, bold/italic/inline-code, fenced blocks, lists, links as text); unit tests over pulldown-cmark events → elements
+- [ ] 4.7 Collapsible thread panel: toggle action, per-thread persisted collapse state (default expanded), queue-depth/error indicators still visible when collapsed
 
-## 5. Verification
+## 5. Review surface: external editor handoff
 
-- [ ] 5.1 `cargo test --workspace` green including new integration tests; `cargo clippy` clean
-- [ ] 5.2 Manual end-to-end: real ACP agent (e.g. claude-code-acp) edits a file in a scratch repo; reviewer edits a line, comments, rejects a hunk, sends feedback, agent replies in-thread; restart app, state intact
-- [ ] 5.3 Update README (try-it steps with a real agent, config example) and record the v1 limitations (hunk granularity, refresh-not-watch, no IME)
+- [ ] 5.1 Editor config with `{file}`/`{line}` template + presets (zed, nvim, code); unset-config error path
+- [ ] 5.2 `J` jump action: new-side line mapping (removed-only lines → hunk `new_start`), detached spawn, no-editor-config error surfaced
+- [ ] 5.3 Content guarantee: compare working tree vs preview materialization before jump; mismatch → confirm write-back first, cancel aborts
+- [ ] 5.4 Refresh-after-return flow: external edits appear as human-provenance hunks, prior review state preserved (reuses task 1.4 matching)
+
+## 6. Verification
+
+- [ ] 6.1 `cargo test --workspace` green including new integration tests; `cargo clippy` clean
+- [ ] 6.2 Manual end-to-end: real ACP agent (e.g. claude-code-acp) edits a file in a scratch repo; reviewer edits a line, comments, rejects a hunk, sends feedback, agent replies in-thread (rendered, collapsible); jump to Zed/Nvim at focused line, edit externally, refresh, review the external edit; restart app, state intact
+- [ ] 6.3 Update README (try-it steps with a real agent, config example, editor presets) and record the v1 limitations (hunk granularity, refresh-not-watch, no IME, markdown subset)
 
 ## Workflow follow-up
 
