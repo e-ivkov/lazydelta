@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/acp", "crates/app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/egor/lazydelta"
+
+[workspace.dependencies]
+similar = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+gpui = "0.2.2"
+lazydelta-core = { path = "crates/core" }
+lazydelta-acp = { path = "crates/acp" }
+
+# xattr 0.2.3 references libc::ENOATTR, which libc removed for Linux in 0.2.184+.
+# zed-async-tar (via gpui) pins xattr ^0.2, so we carry a one-line local patch.
+# Upstream fix: https://github.com/Stebalien/xattr (1.x defines ENOATTR itself).
+[patch.crates-io]
+xattr = { path = "patches/xattr" }
+
+[profile.release]
+lto = "thin"
