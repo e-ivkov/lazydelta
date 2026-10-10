@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Stub ACP agent for tests and demos.
+
+Speaks newline-delimited JSON-RPC 2.0 over stdio: answers initialize /
+session/new / session/prompt, and emits two agent_message_chunk updates
+before responding to a prompt so streaming can be exercised.
+"""
+import json
+import sys
+
+SESSION_ID = "stub-session"
+
+
+def send(msg):
+    sys.stdout.write(json.dumps(msg) + "\n")
+    sys.stdout.flush()
+
+
+def reply(mid, result):
+    send({"jsonrpc": "2.0", "id": mid, "result": result})
+
+
+def notify(method, params):
+    send({"jsonrpc": "2.0", "method": method, "params": params})
+
+
+def chunk(text):
+    notify(
+        "session/update",
+        {
+            "sessionId": SESSION_ID,
+            "sessionUpdate": "agent_message_chunk",
+            "content": {"type": "text", "text": text},
+        },
+    )
+
+
+def main():
+    # Optional: die after a prompt to simulate session death.
+    die_after_prompt = "--die-after-prompt" in sys.argv[1:]
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        msg = json.loads(line)
+        mid, method = msg.get("id"), msg.get("method")
+        if method == "initialize":
+            reply(mid, {"protocolVersion": 1, "agentCapabilities": {}, "authMethods": []})
+        elif method == "session/new":
+            reply(mid, {"sessionId": SESSION_ID, "agentCapabilities": {}})
+        elif method == "session/prompt":
+            if "--hang" in sys.argv[1:]:
+                # Simulate a hung agent: never reply.
+                import time
+                time.sleep(3600)
+            chunk("Got your feedback. ")
+            chunk("I will match the style you showed.")
+            reply(mid, {"stopReason": "end_turn"})
+            if die_after_prompt:
+                sys.exit(0)
+        else:
+            reply(mid, None)
+
+
+if __name__ == "__main__":
+    main()

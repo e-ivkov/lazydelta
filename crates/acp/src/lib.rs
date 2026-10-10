@@ -128,6 +128,16 @@ impl AcpAgent {
         std::mem::take(&mut self.pending_updates)
     }
 
+    /// The agent process id, for watchdog enforcement.
+    pub fn pid(&self) -> Option<u32> {
+        Some(self.child.id())
+    }
+
+    /// Kill the agent process (used by the runner on timeout/session death).
+    pub fn kill(&mut self) {
+        let _ = self.child.kill();
+    }
+
     /// Send a JSON-RPC request and block until its response arrives,
     /// buffering any notifications seen along the way.
     fn call(&mut self, method: &str, params: Value) -> Result<Value> {

@@ -9,6 +9,9 @@
 //! Statuses model review mode: hunks start `Proposed`, and are gated by
 //! `Accepted` / `Rejected` before they materialize into the worktree.
 
+pub mod git;
+pub mod snapshot;
+
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Write as _;
@@ -203,6 +206,90 @@ impl ChangeSet {
             }],
             next_hunk_id: next_id,
         }
+    }
+
+    /// Build a changeset from base/current content maps (pure — no IO).
+    /// Files present in `current` but not `base` are new (empty base). Files
+    /// only in `base` (deletions) are skipped — v1 does not model deletions.
+    pub fn from_contents(
+        base: &BTreeMap<PathBuf, String>,
+        current: &BTreeMap<PathBuf, String>,
+        origin: Provenance,
+    ) -> Self {
+        let mut files = Vec::new();
+        for (path, new_text) in current {
+            let old_text = base.get(path).map(String::as_str).unwrap_or("");
+            if old_text == new_text {
+                continue;
+            }
+            let inner = ChangeSet::from_diff(path.clone(), old_text, new_text, origin.clone());
+            files.push(FileChange {
+                path: path.clone(),
+                base: old_text.to_string(),
+                hunks: inner.files.into_iter().next().map(|f| f.hunks).unwrap_or_default(),
+            });
+        }
+        ChangeSet {
+            next_hunk_id: files.iter().map(|f| f.hunks.len()).sum::<usize>() as HunkId + 1,
+            files,
+        }
+    }
+
+    /// Carry review state (statuses, comments, human edits) from an older
+    /// changeset onto a freshly derived one, matching hunks on
+    /// `(path, old_start, old_len)` (design D5). Returns human-readable
+    /// warnings for dropped or ambiguous matches.
+    pub fn carry_state_from(&mut self, old: &ChangeSet) -> Vec<String> {
+        let mut warnings = Vec::new();
+        for file in &mut self.files {
+            let Some(old_file) = old.files.iter().find(|f| f.path == file.path) else {
+                continue;
+            };
+            for hunk in &mut file.hunks {
+                let matches: Vec<_> = old_file
+                    .hunks
+                    .iter()
+                    .filter(|h| h.old_start == hunk.old_start && h.old_len == hunk.old_len)
+                    .collect();
+                match matches.len() {
+                    0 => warnings.push(format!(
+                        "{}: new hunk @{} has no prior review state",
+                        file.path.display(),
+                        hunk.old_start
+                    )),
+                    1 => {
+                        let src = matches[0];
+                        hunk.status = src.status;
+                        hunk.comments = src.comments.clone();
+                        // Re-record human edits that survived on disk.
+                        hunk.human_edits.clear();
+                        for edit in &src.human_edits {
+                            let persisted = hunk.lines.iter().any(|l| {
+                                l.kind == LineKind::Added && l.text == edit.to
+                            });
+                            if persisted {
+                                hunk.human_edits.push(edit.clone());
+                            }
+                        }
+                        if src.provenance == Provenance::HumanFix
+                            && !hunk.human_edits.is_empty()
+                        {
+                            hunk.provenance = Provenance::HumanFix;
+                        }
+                    }
+                    _ => {
+                        let src = matches[0];
+                        hunk.status = src.status;
+                        warnings.push(format!(
+                            "{}: ambiguous hunk match @{} — carried from the first prior hunk",
+                            file.path.display(),
+                            hunk.old_start
+                        ));
+                    }
+                }
+            }
+        }
+        warnings
     }
 
     fn file_mut(&mut self, hunk_id: HunkId) -> Option<&mut FileChange> {
@@ -591,6 +678,101 @@ mod tests {
         let json = serde_json::to_string(&cs).unwrap();
         let back: ChangeSet = serde_json::from_str(&json).unwrap();
         assert_eq!(back, cs);
+    }
+
+    #[test]
+    fn carry_state_matches_hunks_by_key() {
+        let mut old = demo();
+        let hunk_id = old.files[0].hunks[0].id;
+        let _ = old.accept_hunk(hunk_id);
+        let _ = old.add_comment(hunk_id, None, "you", "keep this");
+
+        // Fresh derivation of the same change: same hunk keys.
+        let mut fresh = demo();
+        let warnings = fresh.carry_state_from(&old);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(fresh.files[0].hunks[0].status, HunkStatus::Accepted);
+        assert_eq!(fresh.files[0].hunks[0].comments.len(), 1);
+    }
+
+    #[test]
+    fn carry_state_reports_no_match() {
+        let old = demo();
+        // A change in a region whose hunk keys cannot overlap the old ones.
+        let mut fresh = ChangeSet::from_diff(
+            "src/main.rs",
+            "a\nb\nc\nd\ne\nf\ng\nh\n",
+            "a\nb\nc\nd\ne\nf\nG\nh\n",
+            Provenance::Agent { agent: "a".into(), turn: 2 },
+        );
+        let warnings = fresh.carry_state_from(&old);
+        assert!(warnings.iter().any(|w| w.contains("no prior review state")));
+    }
+
+    #[test]
+    fn carry_state_flags_ambiguity() {
+        let old = demo();
+        // Two old hunks with identical keys can't exist in one derivation,
+        // but a manual construction simulates a split-after-refresh case.
+        let mut split = old.clone();
+        let orig = split.files[0].hunks[0].clone();
+        let mut dup = orig.clone();
+        dup.id = 99;
+        split.files[0].hunks.push(dup);
+
+        let mut fresh = demo();
+        let warnings = fresh.carry_state_from(&split);
+        assert!(warnings.iter().any(|w| w.contains("ambiguous")));
+    }
+
+    #[test]
+    fn carry_state_keeps_only_persisted_human_edits() {
+        let mut old = demo();
+        let hunk_id = old.files[0].hunks[0].id;
+        let line_idx = old
+            .hunk(hunk_id)
+            .unwrap()
+            .lines
+            .iter()
+            .position(|l| l.kind == LineKind::Added)
+            .unwrap();
+        let _ = old.edit_added_line(hunk_id, line_idx, "    let x = compute(&input);");
+
+        // Case 1: edit persisted to disk -> survives refresh.
+        let persisted = ChangeSet::from_diff(
+            "src/main.rs",
+            BASE,
+            &PROPOSED.replace("let x = compute(1);", "let x = compute(&input);"),
+            Provenance::Agent { agent: "claude-code".into(), turn: 1 },
+        );
+        let mut p = persisted;
+        let warnings = p.carry_state_from(&old);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(!p.files[0].hunks[0].human_edits.is_empty());
+        assert_eq!(p.files[0].hunks[0].provenance, Provenance::HumanFix);
+
+        // Case 2: edit never hit disk (agent's text still there) -> dropped.
+        let mut np = demo();
+        let _ = np.carry_state_from(&old);
+        assert!(np.files[0].hunks[0].human_edits.is_empty());
+        assert_eq!(
+            np.files[0].hunks[0].provenance,
+            Provenance::Agent { agent: "claude-code".into(), turn: 1 }
+        );
+    }
+
+    #[test]
+    fn from_contents_skips_unchanged_and_deletions() {
+        let mut base = BTreeMap::new();
+        base.insert(PathBuf::from("a.rs"), "same\n".to_string());
+        base.insert(PathBuf::from("gone.rs"), "deleted later\n".to_string());
+        let mut current = BTreeMap::new();
+        current.insert(PathBuf::from("a.rs"), "same\n".to_string());
+        current.insert(PathBuf::from("new.rs"), "fresh\n".to_string());
+        let cs = ChangeSet::from_contents(&base, &current, Provenance::Human);
+        assert_eq!(cs.files.len(), 1);
+        assert_eq!(cs.files[0].path, PathBuf::from("new.rs"));
+        assert!(cs.files[0].hunks.iter().any(|h| h.lines.iter().any(|l| l.text == "fresh")));
     }
 
     #[test]

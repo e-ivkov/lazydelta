@@ -27,6 +27,9 @@ pub struct EditableLine {
     content: String,
     /// UTF-8 byte offset of the cursor (selection is not supported).
     cursor: usize,
+    /// Vim semantics for line editing (task 6.3): `Esc` commits the edit
+    /// instead of cancelling it (cancelling is for comment drafts).
+    escape_commits: bool,
     #[allow(dead_code)]
     last_bounds: Option<Bounds<Pixels>>,
 }
@@ -34,12 +37,18 @@ pub struct EditableLine {
 impl EventEmitter<EditEvent> for EditableLine {}
 
 impl EditableLine {
-    pub fn new(text: &str, return_focus: FocusHandle, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        text: &str,
+        return_focus: FocusHandle,
+        escape_commits: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         EditableLine {
             focus_handle: cx.focus_handle(),
             return_focus,
             content: text.to_string(),
             cursor: text.len(),
+            escape_commits,
             last_bounds: None,
         }
     }
@@ -90,6 +99,11 @@ impl EditableLine {
     }
 
     fn cancel(&mut self, _: &LineCancel, window: &mut Window, cx: &mut Context<Self>) {
+        if self.escape_commits {
+            // Vim insert mode: leaving with Esc keeps the changes (task 6.3).
+            self.commit(&LineCommit, window, cx);
+            return;
+        }
         cx.emit(EditEvent::Cancel);
         let back = self.return_focus.clone();
         window.focus(&back);

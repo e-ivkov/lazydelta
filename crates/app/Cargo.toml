@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "lazydelta_app"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lazydelta"
 path = "src/main.rs"
@@ -12,3 +16,7 @@ path = "src/main.rs"
 [dependencies]
 gpui = { workspace = true }
 lazydelta-core = { workspace = true }
+lazydelta-acp = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+pulldown-cmark = "0.13"
